@@ -9,25 +9,6 @@ import java.util.*;
  */
 public class AIMove {
     
-    // Minimal Cell definition for standalone compilation
-    static class Cell {
-        enum CellType { BLACK, NUMBER, BLANK }
-        CellType type;
-        int number;
-        boolean bulb;
-        boolean dot;
-        boolean lit;
-        int row, col;
-        int graphId;
-        
-        Cell(CellType t, int num, int r, int c) {
-            type = t; number = num; row = r; col = c;
-            bulb = false; dot = false; lit = false; graphId = -1;
-        }
-        
-        boolean isWall() { return type == CellType.BLACK || type == CellType.NUMBER; }
-    }
-
     // ===== REGION STRUCTURE =====
     
     /**
@@ -57,19 +38,12 @@ public class AIMove {
      * then evaluates all candidate placements in the region and returns
      * the best (r,c) found.
      * 
-     * Divide strategy:
-     *   - If the region contains ≤ MIN_REGION_AREA cells, evaluate all
-     *     candidates directly (base case).
-     *   - Otherwise, split along the longer axis. Recursively solve
-     *     both halves. Choose the better candidate by DP score, but
-     *     prefer the sub-region that has more unlit cells (most urgent).
-     * 
      * @param board The game board
      * @param region The region to evaluate
      * @param dpScorer Function to score each candidate position
      * @return int[]{bestScore, bestR, bestC} or null if no candidate found
      */
-    public static int[] dcBestInRegion(Cell[][] board, int rows, int cols,
+    public static int[] dcBestInRegion(CommonCell[][] board, int rows, int cols,
                                         Region region,
                                         DPScorer dpScorer) {
         if (region.area() <= MIN_REGION_AREA ||
@@ -115,7 +89,7 @@ public class AIMove {
      * Evaluates all blank, placeable candidates in a region.
      * Returns {score, r, c}.
      */
-    private static int[] evaluateRegion(Cell[][] board, int rows, int cols,
+    private static int[] evaluateRegion(CommonCell[][] board, int rows, int cols,
                                          Region reg,
                                          DPScorer dpScorer) {
         int bestScore = Integer.MIN_VALUE;
@@ -123,7 +97,7 @@ public class AIMove {
 
         for (int r = reg.r0; r <= reg.r1; r++) {
             for (int c = reg.c0; c <= reg.c1; c++) {
-                if (board[r][c].type != Cell.CellType.BLANK) continue;
+                if (board[r][c].type != CommonCell.CellType.BLANK) continue;
                 
                 int score = dpScorer.score(r, c);
                 if (score == Integer.MIN_VALUE) continue; // canPlace returned false
@@ -142,11 +116,11 @@ public class AIMove {
     /**
      * Counts unlit blank cells in a region (used for D&C urgency comparison).
      */
-    private static int countUnlitInRegion(Cell[][] board, Region reg) {
+    private static int countUnlitInRegion(CommonCell[][] board, Region reg) {
         int count = 0;
         for (int r = reg.r0; r <= reg.r1; r++)
             for (int c = reg.c0; c <= reg.c1; c++)
-                if (board[r][c].type == Cell.CellType.BLANK && !board[r][c].lit)
+                if (board[r][c].type == CommonCell.CellType.BLANK && !board[r][c].lit)
                     count++;
         return count;
     }
@@ -157,7 +131,7 @@ public class AIMove {
      * Main AI decision function
      * Returns {r, c, type} where type: 0=bulb, 1=remove, 2=dot, -1=no move
      */
-    public static int[] makeAIMove(Cell[][] board, int rows, int cols,
+    public static int[] makeAIMove(CommonCell[][] board, int rows, int cols,
                                     DPScorer dpScorer) {
         // PHASE 1: Fix a rule violation (one removal per turn)
         List<int[]> violating = new ArrayList<>();
@@ -200,12 +174,12 @@ public class AIMove {
      * Finds a forced placement around numbered cells
      * Returns {r, c} if found, null otherwise
      */
-    private static int[] findForcedNumberedCellPlacement(Cell[][] board, int rows, int cols) {
+    private static int[] findForcedNumberedCellPlacement(CommonCell[][] board, int rows, int cols) {
         int[][] d = {{1,0},{-1,0},{0,1},{0,-1}};
         
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                if (board[r][c].type != Cell.CellType.NUMBER) continue;
+                if (board[r][c].type != CommonCell.CellType.NUMBER) continue;
                 
                 int need = board[r][c].number;
                 List<int[]> empties = new ArrayList<>();
@@ -217,7 +191,7 @@ public class AIMove {
                     
                     if (board[nr][nc].bulb) {
                         placed++;
-                    } else if (board[nr][nc].type == Cell.CellType.BLANK && 
+                    } else if (board[nr][nc].type == CommonCell.CellType.BLANK && 
                                !board[nr][nc].dot) {
                         empties.add(new int[]{nr, nc});
                     }
@@ -239,12 +213,12 @@ public class AIMove {
      * Finds a strategic position to place a dot marker
      * Useful for eliminating possibilities and guiding search
      */
-    private static int[] findStrategicDotPlacement(Cell[][] board, int rows, int cols) {
+    private static int[] findStrategicDotPlacement(CommonCell[][] board, int rows, int cols) {
         int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
         
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                if (board[r][c].type != Cell.CellType.BLANK || 
+                if (board[r][c].type != CommonCell.CellType.BLANK || 
                     board[r][c].bulb || 
                     board[r][c].dot) continue;
                 
@@ -255,7 +229,7 @@ public class AIMove {
                     while (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
                         if (board[nr][nc].isWall()) break;
                         
-                        if (board[nr][nc].type == Cell.CellType.BLANK && 
+                        if (board[nr][nc].type == CommonCell.CellType.BLANK && 
                             canPlaceBulb(board, rows, cols, nr, nc)) {
                             visibleSpots++;
                             break;
@@ -282,7 +256,7 @@ public class AIMove {
     /**
      * Checks if a bulb at (r,c) violates any rules
      */
-    private static boolean isViolatingBulb(Cell[][] board, int rows, int cols, int r, int c) {
+    public static boolean isViolatingBulb(CommonCell[][] board, int rows, int cols, int r, int c) {
         if (!board[r][c].bulb) return false;
         
         int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
@@ -303,7 +277,7 @@ public class AIMove {
             int nr = r + d[0], nc = c + d[1];
             if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
             
-            if (board[nr][nc].type == Cell.CellType.NUMBER) {
+            if (board[nr][nc].type == CommonCell.CellType.NUMBER) {
                 int count = 0;
                 for (int[] d2 : dirs) {
                     int rr = nr + d2[0], cc = nc + d2[1];
@@ -321,8 +295,8 @@ public class AIMove {
     /**
      * Checks if a bulb can be legally placed at position (r,c)
      */
-    private static boolean canPlaceBulb(Cell[][] board, int rows, int cols, int r, int c) {
-        if (board[r][c].type != Cell.CellType.BLANK) return false;
+    public static boolean canPlaceBulb(CommonCell[][] board, int rows, int cols, int r, int c) {
+        if (board[r][c].type != CommonCell.CellType.BLANK) return false;
         if (board[r][c].bulb || board[r][c].dot) return false;
         
         int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
@@ -343,7 +317,7 @@ public class AIMove {
             int nr = r + d[0], nc = c + d[1];
             if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
             
-            if (board[nr][nc].type == Cell.CellType.NUMBER) {
+            if (board[nr][nc].type == CommonCell.CellType.NUMBER) {
                 int count = 0;
                 for (int[] d2 : dirs) {
                     int rr = nr + d2[0], cc = nc + d2[1];
