@@ -1,91 +1,62 @@
 import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
-import java.util.List;
 import javax.swing.*;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 
 /**
- * Responsibilities:
- * - Build and manage user interface
- * - Handle user input (mouse clicks, button actions)
- * - Undo/Redo state management
- * - Lighting computation
- * - Puzzle validation
- * - Greedy solver algorithm
- * - Victory detection and team win popup
+ * Base UI class for the Light Up game
  */
 public class GameUI extends JFrame {
     
-    // Minimal Cell definition for standalone compilation
-    static class Cell {
-        enum CellType { BLACK, NUMBER, BLANK }
-        CellType type;
-        int number;
-        boolean bulb;
-        boolean dot;
-        boolean lit;
-        int row, col;
-        int graphId;
-        
-        Cell(CellType t, int num, int r, int c) {
-            type = t; number = num; row = r; col = c;
-            bulb = false; dot = false; lit = false; graphId = -1;
-        }
-        
-        boolean isWall() { return type == CellType.BLACK || type == CellType.NUMBER; }
-    }
-
     // ===== STATE MANAGEMENT =====
     
-    static class BoardState {
-        boolean[][] bulbs;
-        boolean[][] dots;
-        boolean userTurn;
-        boolean userContributed;
-        boolean aiContributed;
-        int lastComputerR;
-        int lastComputerC;
+    public static class BoardState {
+        public boolean[][] bulbs;
+        public boolean[][] dots;
+        public boolean userTurn;
+        public boolean userContributed;
+        public boolean aiContributed;
+        public int lastComputerR;
+        public int lastComputerC;
 
-        BoardState(int rows, int cols) {
+        public BoardState(int rows, int cols) {
             bulbs = new boolean[rows][cols];
             dots = new boolean[rows][cols];
         }
     }
 
-    private Cell[][] board;
-    private int rows = 7, cols = 7;
-    private JPanel gridPanel;
-    private JLabel statusLabel;
-    private boolean userTurn = true;
-    private int lastComputerR = -1, lastComputerC = -1;
-    private boolean userContributed = false;
-    private boolean aiContributed = false;
+    protected CommonCell[][] board;
+    protected int rows = 7, cols = 7;
+    protected JPanel gridPanel;
+    protected JLabel statusLabel;
+    protected boolean userTurn = true;
+    protected int lastComputerR = -1, lastComputerC = -1;
+    protected boolean userContributed = false;
+    protected boolean aiContributed = false;
 
-    private Deque<BoardState> undoStack = new ArrayDeque<>();
-    private Deque<BoardState> redoStack = new ArrayDeque<>();
+    protected Deque<BoardState> undoStack = new ArrayDeque<>();
+    protected Deque<BoardState> redoStack = new ArrayDeque<>();
 
     // ===== COLOR SCHEME =====
-    private final Color BG_COLOR        = new Color(245, 247, 250);
-    private final Color GRID_BG         = new Color(255, 255, 255);
-    private final Color WALL_COLOR      = new Color(30,  40,  60);
-    private final Color NUMBER_COLOR    = new Color(240, 245, 255);
-    private final Color LIT_COLOR       = new Color(255, 253, 200);
-    private final Color BULB_COLOR      = new Color(255, 225, 50);
-    private final Color BULB_GLOW       = new Color(255, 255, 200, 80);
-    private final Color DOT_COLOR       = new Color(180, 180, 180);
-    private final Color CONFLICT_COLOR  = new Color(255, 100, 100, 90);
-    private final Color AI_HIGHLIGHT    = new Color(80,  200, 120, 100);
-    private final Color GRID_LINE       = new Color(210, 215, 225);
-    private final Color PANEL_BG        = new Color(250, 252, 255);
+    protected final Color BG_COLOR = new Color(245, 247, 250);
+    protected final Color GRID_BG = new Color(255, 255, 255);
+    protected final Color WALL_COLOR = new Color(30, 40, 60);
+    protected final Color NUMBER_COLOR = new Color(240, 245, 255);
+    protected final Color LIT_COLOR = new Color(255, 253, 200);
+    protected final Color BULB_COLOR = new Color(255, 225, 50);
+    protected final Color BULB_GLOW = new Color(255, 255, 200, 80);
+    protected final Color DOT_COLOR = new Color(180, 180, 180);
+    protected final Color CONFLICT_COLOR = new Color(255, 100, 100, 120); // More visible red
+    protected final Color WRONG_CELL_COLOR = new Color(255, 200, 200, 150); // Light red for wrong cells
+    protected final Color AI_HIGHLIGHT = new Color(80, 200, 120, 100);
+    protected final Color GRID_LINE = new Color(210, 215, 225);
+    protected final Color PANEL_BG = new Color(250, 252, 255);
 
     // ===== UI BUILDING =====
     
-    /**
-     * Builds the complete user interface
-     */
     public void buildUI() {
         setLayout(new BorderLayout(0, 0));
         getContentPane().setBackground(BG_COLOR);
@@ -105,7 +76,8 @@ public class GameUI extends JFrame {
         JLabel turnIndicator = new JLabel("", SwingConstants.RIGHT);
         turnIndicator.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         turnIndicator.setForeground(new Color(100,120,140));
-        new Timer(500, e -> {
+        
+        Timer timer = new Timer(500, e -> {
             if (userTurn) {
                 turnIndicator.setText("YOUR TURN");
                 turnIndicator.setForeground(new Color(80,150,80));
@@ -113,7 +85,9 @@ public class GameUI extends JFrame {
                 turnIndicator.setText("AI THINKING");
                 turnIndicator.setForeground(new Color(200,100,100));
             }
-        }).start();
+        });
+        timer.start();
+        
         headerPanel.add(turnIndicator, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
 
@@ -154,9 +128,23 @@ public class GameUI extends JFrame {
         // Status Panel
         JPanel statusPanel = createStatusPanel();
         add(statusPanel, BorderLayout.SOUTH);
+        
+        // Initialize with empty board if not set
+        if (board == null) {
+            initializeEmptyBoard();
+        }
     }
 
-    private JPanel createControlPanel() {
+    protected void initializeEmptyBoard() {
+        board = new CommonCell[rows][cols];
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                board[r][c] = new CommonCell(CommonCell.CellType.BLANK, -1, r, c);
+            }
+        }
+    }
+
+    protected JPanel createControlPanel() {
         JPanel controlPanel = new JPanel();
         controlPanel.setLayout(new BoxLayout(controlPanel, BoxLayout.Y_AXIS));
         controlPanel.setBackground(PANEL_BG);
@@ -170,7 +158,6 @@ public class GameUI extends JFrame {
         JButton redoBtn    = createMinimalButton("Redo", new Color(106,90,205));
         JButton solveBtn   = createMinimalButton("Solve", new Color(50,180, 80));
 
-        // Button listeners would connect to game logic
         undoBtn.addActionListener(e -> handleUndo());
         redoBtn.addActionListener(e -> handleRedo());
 
@@ -194,7 +181,8 @@ public class GameUI extends JFrame {
         controlPanel.add(Box.createVerticalGlue());
         controlPanel.add(counterPanel);
 
-        new Timer(100, e -> moveCounter.setText("Moves: " + (undoStack.size()-1))).start();
+        Timer timer = new Timer(100, e -> moveCounter.setText("Moves: " + (undoStack.size())));
+        timer.start();
 
         return controlPanel;
     }
@@ -206,7 +194,7 @@ public class GameUI extends JFrame {
             BorderFactory.createMatteBorder(1,0,0,0,new Color(220,225,230)),
             new EmptyBorder(8,20,8,20)));
         
-        statusLabel = new JLabel("Click cells to place bulbs");
+        statusLabel = new JLabel("Click cells to place bulbs. Red = wrong placement.");
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         statusLabel.setForeground(new Color(80,90,110));
         statusPanel.add(statusLabel, BorderLayout.WEST);
@@ -219,7 +207,7 @@ public class GameUI extends JFrame {
         return statusPanel;
     }
 
-    private JButton createMinimalButton(String text, Color baseColor) {
+    protected JButton createMinimalButton(String text, Color baseColor) {
         JButton button = new JButton(text);
         button.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         button.setForeground(new Color(50,60,80));
@@ -253,70 +241,17 @@ public class GameUI extends JFrame {
 
     // ===== USER INPUT HANDLING =====
     
-    private void handleMouseClick(MouseEvent e) {
-        int w = gridPanel.getWidth(), h = gridPanel.getHeight();
-        int cellSize = Math.min(w/cols, h/rows);
-        int offsetX = (w - cellSize*cols)/2, offsetY = (h - cellSize*rows)/2;
-        int x = e.getX()-offsetX, y = e.getY()-offsetY;
-        
-        if (x < 0 || y < 0) return;
-        
-        int col = x/cellSize, row = y/cellSize;
-        if (row < 0 || row >= rows || col < 0 || col >= cols) return;
-        
-        if (SwingUtilities.isLeftMouseButton(e)) {
-            handleUserToggleBulb(row, col);
-        } else if (SwingUtilities.isRightMouseButton(e)) {
-            handleUserToggleDot(row, col);
-        }
-    }
-
-    private void handleUserToggleBulb(int r, int c) {
-        Cell cell = board[r][c];
-        if (cell.type != Cell.CellType.BLANK) return;
-        
-        pushUndoState();
-        redoStack.clear();
-        
-        if (cell.bulb) {
-            cell.bulb = false;
-            recomputeLighting();
-            userContributed = true;
-            statusLabel.setText("Bulb removed at ("+r+","+c+")");
-        } else {
-            cell.bulb = true;
-            cell.dot = false;
-            recomputeLighting();
-            userContributed = true;
-            statusLabel.setText("Bulb placed at ("+r+","+c+")");
-        }
-        
-        gridPanel.repaint();
-        
-        if (tryFinishAndPopup()) return;
-        
-        // AI move would be triggered here
-    }
-
-    private void handleUserToggleDot(int r, int c) {
-        Cell cell = board[r][c];
-        if (cell.type != Cell.CellType.BLANK) return;
-        
-        pushUndoState();
-        redoStack.clear();
-        
-        cell.dot = !cell.dot;
-        if (cell.dot) cell.bulb = false;
-        
-        recomputeLighting();
-        userContributed = true;
-        statusLabel.setText((cell.dot?"Marked":"Unmarked")+" dot at ("+r+","+c+")");
-        gridPanel.repaint();
+    protected void handleMouseClick(MouseEvent e) {
+        // To be overridden by subclass
     }
 
     // ===== UNDO/REDO =====
     
-    private void handleUndo() {
+    protected void saveState() {
+        pushUndoState();
+    }
+
+    protected void handleUndo() {
         if (undoStack.size() > 1) {
             redoStack.push(snapshotState());
             undoStack.pop();
@@ -329,7 +264,7 @@ public class GameUI extends JFrame {
         }
     }
 
-    private void handleRedo() {
+    protected void handleRedo() {
         if (!redoStack.isEmpty()) {
             undoStack.push(snapshotState());
             applyState(redoStack.pop());
@@ -341,7 +276,7 @@ public class GameUI extends JFrame {
         }
     }
 
-    private BoardState snapshotState() {
+    protected BoardState snapshotState() {
         BoardState st = new BoardState(rows, cols);
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++) {
@@ -356,7 +291,7 @@ public class GameUI extends JFrame {
         return st;
     }
 
-    private void applyState(BoardState st) {
+    protected void applyState(BoardState st) {
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++) {
                 board[r][c].bulb = st.bulbs[r][c];
@@ -369,16 +304,13 @@ public class GameUI extends JFrame {
         lastComputerC = st.lastComputerC;
     }
 
-    private void pushUndoState() {
+    protected void pushUndoState() {
         undoStack.push(snapshotState());
     }
 
     // ===== LIGHTING COMPUTATION =====
     
-    /**
-     * Recomputes which cells are lit based on current bulb placements
-     */
-    public static void recomputeLighting(Cell[][] board, int rows, int cols) {
+    public static void recomputeLighting(CommonCell[][] board, int rows, int cols) {
         // Clear all lighting
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++)
@@ -412,21 +344,17 @@ public class GameUI extends JFrame {
         }
     }
 
-    private void recomputeLighting() {
+    protected void recomputeLighting() {
         recomputeLighting(board, rows, cols);
     }
 
     // ===== VALIDATION =====
     
-    /**
-     * Validates the current puzzle solution
-     * @return Status message describing validation result
-     */
-    public static String validateSolution(Cell[][] board, int rows, int cols) {
+    public static String validateSolution(CommonCell[][] board, int rows, int cols) {
         // Check all cells are lit
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++)
-                if (board[r][c].type == Cell.CellType.BLANK && !board[r][c].lit)
+                if (board[r][c].type == CommonCell.CellType.BLANK && !board[r][c].lit)
                     return "❌ Unlit cell at ("+r+","+c+")";
 
         int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
@@ -452,7 +380,7 @@ public class GameUI extends JFrame {
         // Check numbered cells
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                if (board[r][c].type != Cell.CellType.NUMBER) continue;
+                if (board[r][c].type != CommonCell.CellType.NUMBER) continue;
                 
                 int count = 0;
                 for (int[] d : dirs) {
@@ -469,7 +397,48 @@ public class GameUI extends JFrame {
         return "Puzzle solved! ✅";
     }
 
-    private boolean tryFinishAndPopup() {
+    /**
+     * Check if a specific cell is in violation of the rules
+     */
+    protected boolean isCellInViolation(int r, int c) {
+        CommonCell cell = board[r][c];
+        
+        // Blank cells with bulbs
+        if (cell.type == CommonCell.CellType.BLANK && cell.bulb) {
+            // Check if this bulb sees another bulb
+            int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
+            for (int[] d : dirs) {
+                int nr = r + d[0], nc = c + d[1];
+                while (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+                    if (board[nr][nc].isWall()) break;
+                    if (board[nr][nc].bulb && (nr != r || nc != c)) {
+                        return true; // Bulb sees another bulb
+                    }
+                    nr += d[0];
+                    nc += d[1];
+                }
+            }
+        }
+        
+        // Numbered cells
+        if (cell.type == CommonCell.CellType.NUMBER) {
+            int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
+            int count = 0;
+            for (int[] d : dirs) {
+                int nr = r + d[0], nc = c + d[1];
+                if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].bulb) {
+                    count++;
+                }
+            }
+            if (count != cell.number) {
+                return true; // Wrong number of adjacent bulbs
+            }
+        }
+        
+        return false;
+    }
+
+    protected boolean tryFinishAndPopup() {
         String result = validateSolution(board, rows, cols);
         if (result.equals("Puzzle solved! ✅")) {
             onSolvedCheckTeamWin();
@@ -478,7 +447,7 @@ public class GameUI extends JFrame {
         return false;
     }
 
-    private void onSolvedCheckTeamWin() {
+    protected void onSolvedCheckTeamWin() {
         statusLabel.setText("Puzzle solved");
         gridPanel.repaint();
         
@@ -490,81 +459,13 @@ public class GameUI extends JFrame {
             "Puzzle Complete", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    // ===== GREEDY SOLVER =====
-    
-    /**
-     * Greedy solver algorithm for the "Solve" button
-     * Also used to check puzzle solvability during generation
-     */
-    public static boolean solveGreedy(Cell[][] board, int rows, int cols) {
-        // Clear all bulbs and dots
-        for (int r = 0; r < rows; r++)
-            for (int c = 0; c < cols; c++) {
-                board[r][c].bulb = false;
-                board[r][c].dot = false;
-            }
-        
-        recomputeLighting(board, rows, cols);
-        
-        boolean progress = true;
-        int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
-        
-        while (progress) {
-            progress = false;
-            
-            // Strategy 1: Fill forced numbered cells
-            for (int r = 0; r < rows; r++) {
-                for (int c = 0; c < cols; c++) {
-                    if (board[r][c].type != Cell.CellType.NUMBER) continue;
-                    
-                    int need = board[r][c].number;
-                    int placed = 0;
-                    List<int[]> blanks = new ArrayList<>();
-                    
-                    for (int[] d : dirs) {
-                        int nr = r + d[0], nc = c + d[1];
-                        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
-                        
-                        if (board[nr][nc].bulb) {
-                            placed++;
-                        } else if (board[nr][nc].type == Cell.CellType.BLANK && 
-                                   !board[nr][nc].dot) {
-                            blanks.add(new int[]{nr, nc});
-                        }
-                    }
-                    
-                    // If remaining spots exactly match remaining need, fill them
-                    if (placed + blanks.size() == need) {
-                        for (int[] p : blanks) {
-                            board[p[0]][p[1]].bulb = true;
-                            progress = true;
-                        }
-                    }
-                }
-            }
-            
-            recomputeLighting(board, rows, cols);
-            
-            // Strategy 2: Place bulbs in unlit cells that are safe
-            for (int r = 0; r < rows; r++) {
-                for (int c = 0; c < cols; c++) {
-                    if (board[r][c].type == Cell.CellType.BLANK && 
-                        !board[r][c].lit && 
-                        canPlaceBulbSimple(board, rows, cols, r, c)) {
-                        board[r][c].bulb = true;
-                        recomputeLighting(board, rows, cols);
-                        progress = true;
-                    }
-                }
-            }
-        }
-        
-        return validateSolution(board, rows, cols).equals("Puzzle solved! ✅");
+    protected boolean canPlaceBulb(CommonCell[][] board, int rows, int cols, int r, int c) {
+        return canPlaceBulbSimple(board, rows, cols, r, c);
     }
 
-    private static boolean canPlaceBulbSimple(Cell[][] board, int rows, int cols, 
+    protected static boolean canPlaceBulbSimple(CommonCell[][] board, int rows, int cols, 
                                                int r, int c) {
-        if (board[r][c].type != Cell.CellType.BLANK) return false;
+        if (board[r][c].type != CommonCell.CellType.BLANK) return false;
         if (board[r][c].bulb || board[r][c].dot) return false;
         
         int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
@@ -584,7 +485,7 @@ public class GameUI extends JFrame {
 
     // ===== GRID PAINTING =====
     
-    private void paintGrid(Graphics g) {
+    protected void paintGrid(Graphics g) {
         Graphics2D g2 = (Graphics2D) g;
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, 
                             RenderingHints.VALUE_ANTIALIAS_ON);
@@ -601,37 +502,67 @@ public class GameUI extends JFrame {
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
                 int x = offsetX + c*cellSize, y = offsetY + r*cellSize;
-                Cell cell = board[r][c];
+                CommonCell cell = board[r][c];
+                
+                // Check if this cell is in violation
+                boolean inViolation = isCellInViolation(r, c);
 
                 // Draw cell background
-                if (cell.type == Cell.CellType.BLACK || 
-                    cell.type == Cell.CellType.NUMBER) {
+                if (cell.type == CommonCell.CellType.BLACK || 
+                    cell.type == CommonCell.CellType.NUMBER) {
                     g2.setColor(WALL_COLOR);
                     g2.fillRect(x+1, y+1, cellSize-2, cellSize-2);
                     
-                    if (cell.type == Cell.CellType.NUMBER) {
+                    if (cell.type == CommonCell.CellType.NUMBER) {
                         g2.setFont(new Font("Segoe UI", Font.BOLD, cellSize/2));
                         String s = Integer.toString(cell.number);
                         FontMetrics fm = g2.getFontMetrics();
-                        g2.setColor(NUMBER_COLOR);
+                        
+                        // If numbered cell is in violation, draw number in red
+                        if (inViolation) {
+                            g2.setColor(Color.RED);
+                        } else {
+                            g2.setColor(NUMBER_COLOR);
+                        }
                         g2.drawString(s, x+(cellSize-fm.stringWidth(s))/2, 
                                      y+(cellSize+fm.getAscent())/2-4);
                     }
                 } else {
-                    g2.setColor(cell.lit ? LIT_COLOR : GRID_BG);
+                    // Draw blank cell with appropriate color
+                    if (inViolation && cell.bulb) {
+                        // Wrong bulb placement - show red background
+                        g2.setColor(WRONG_CELL_COLOR);
+                    } else if (cell.lit) {
+                        g2.setColor(LIT_COLOR);
+                    } else {
+                        g2.setColor(GRID_BG);
+                    }
                     g2.fillRect(x+1, y+1, cellSize-2, cellSize-2);
                 }
 
                 // Draw bulb
                 if (cell.bulb) {
                     int bs = cellSize*3/5, bx = x+(cellSize-bs)/2, by = y+(cellSize-bs)/2;
-                    g2.setColor(BULB_GLOW);
+                    
+                    // If bulb is in violation, make the glow red
+                    if (inViolation) {
+                        g2.setColor(new Color(255, 100, 100, 80));
+                    } else {
+                        g2.setColor(BULB_GLOW);
+                    }
                     g2.fillOval(bx-3, by-3, bs+6, bs+6);
+                    
                     GradientPaint grad = new GradientPaint(bx, by, BULB_COLOR.brighter(), 
                                                            bx+bs, by+bs, BULB_COLOR);
                     g2.setPaint(grad);
                     g2.fillOval(bx, by, bs, bs);
-                    g2.setColor(BULB_COLOR.darker());
+                    
+                    // If bulb is in violation, draw red outline
+                    if (inViolation) {
+                        g2.setColor(Color.RED);
+                    } else {
+                        g2.setColor(BULB_COLOR.darker());
+                    }
                     g2.setStroke(new BasicStroke(1.5f));
                     g2.drawOval(bx, by, bs, bs);
                     
@@ -650,11 +581,21 @@ public class GameUI extends JFrame {
                     g2.drawOval(dx, dy, ds, ds);
                 }
 
+                // Draw conflict overlay (for cells that are causing rule violations)
+                if (inViolation && !cell.bulb && cell.type != CommonCell.CellType.NUMBER) {
+                    g2.setColor(CONFLICT_COLOR);
+                    g2.fillRect(x+1, y+1, cellSize-2, cellSize-2);
+                }
+
                 // Draw grid lines
                 g2.setColor(GRID_LINE);
                 g2.setStroke(new BasicStroke(1));
                 g2.drawRect(x, y, cellSize, cellSize);
             }
         }
+    }
+
+    protected void updateStatusLabel() {
+        // To be overridden
     }
 }
