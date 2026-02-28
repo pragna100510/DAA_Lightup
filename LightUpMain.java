@@ -14,7 +14,7 @@ import javax.swing.Timer;
  * - Undo/Redo: complete board-state snapshots
  * - "Team win" popup: when both user and AI contributed
  */
-public class LightUp extends GameUI {
+public class LightUpMain extends GameUI {
     
     private Map<Integer, GraphBuilding.GraphNode> cellGraph;
     private List<GraphBuilding.GraphNode> blankNodes;
@@ -30,7 +30,7 @@ public class LightUp extends GameUI {
     private boolean[][] perfectSolution;
     private boolean solutionReady = false;
 
-    public LightUp() {
+    public LightUpMain() {
         super();
         blankNodes = new ArrayList<>();
         centralityOrder = new HashMap<>();
@@ -624,7 +624,7 @@ public class LightUp extends GameUI {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            new LightUp();
+            new LightUpMain();
         });
     }
 }
