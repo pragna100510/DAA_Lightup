@@ -10,7 +10,18 @@ import javax.swing.border.LineBorder;
  * Base UI class for the Light Up game
  */
 public class GameUI extends JFrame {
-    
+
+    // ===== ALGORITHM SELECTION =====
+
+    public enum AlgoMode { GREEDY, DC_DP, BACKTRACKING }
+
+    protected AlgoMode aiAlgoMode     = AlgoMode.DC_DP;
+    protected AlgoMode solverAlgoMode = AlgoMode.DC_DP;
+
+    // Accessible by subclass (LightUp) to read selected mode
+    protected JComboBox<String> aiAlgoCombo;
+    protected JComboBox<String> solverAlgoCombo;
+
     // ===== STATE MANAGEMENT =====
     
     public static class BoardState {
@@ -170,6 +181,65 @@ public class GameUI extends JFrame {
         controlPanel.add(redoBtn);
         controlPanel.add(Box.createVerticalStrut(8));
         controlPanel.add(solveBtn);
+
+        // ── Algorithm selectors ────────────────────────────────────────────
+        String[] algoOptions = { "Greedy", "DC + DP", "Backtracking" };
+
+        controlPanel.add(Box.createVerticalStrut(16));
+
+        JSeparator sep1 = new JSeparator();
+        sep1.setMaximumSize(new Dimension(160, 1));
+        controlPanel.add(sep1);
+        controlPanel.add(Box.createVerticalStrut(10));
+
+        JLabel aiLabel = new JLabel("AI Algorithm:");
+        aiLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        aiLabel.setForeground(new Color(50, 60, 80));
+        aiLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        controlPanel.add(aiLabel);
+        controlPanel.add(Box.createVerticalStrut(4));
+
+        aiAlgoCombo = new JComboBox<>(algoOptions);
+        aiAlgoCombo.setSelectedIndex(1); // default: DC + DP
+        aiAlgoCombo.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        aiAlgoCombo.setMaximumSize(new Dimension(160, 28));
+        aiAlgoCombo.setAlignmentX(Component.CENTER_ALIGNMENT);
+        aiAlgoCombo.addActionListener(e -> {
+            switch (aiAlgoCombo.getSelectedIndex()) {
+                case 0: aiAlgoMode = AlgoMode.GREEDY;       break;
+                case 1: aiAlgoMode = AlgoMode.DC_DP;        break;
+                case 2: aiAlgoMode = AlgoMode.BACKTRACKING; break;
+            }
+        });
+        controlPanel.add(aiAlgoCombo);
+
+        controlPanel.add(Box.createVerticalStrut(12));
+
+        JSeparator sep2 = new JSeparator();
+        sep2.setMaximumSize(new Dimension(160, 1));
+        controlPanel.add(sep2);
+        controlPanel.add(Box.createVerticalStrut(10));
+
+        JLabel solverLabel = new JLabel("Solver Algorithm:");
+        solverLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        solverLabel.setForeground(new Color(50, 60, 80));
+        solverLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        controlPanel.add(solverLabel);
+        controlPanel.add(Box.createVerticalStrut(4));
+
+        solverAlgoCombo = new JComboBox<>(algoOptions);
+        solverAlgoCombo.setSelectedIndex(1); // default: DC + DP
+        solverAlgoCombo.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        solverAlgoCombo.setMaximumSize(new Dimension(160, 28));
+        solverAlgoCombo.setAlignmentX(Component.CENTER_ALIGNMENT);
+        solverAlgoCombo.addActionListener(e -> {
+            switch (solverAlgoCombo.getSelectedIndex()) {
+                case 0: solverAlgoMode = AlgoMode.GREEDY;       break;
+                case 1: solverAlgoMode = AlgoMode.DC_DP;        break;
+                case 2: solverAlgoMode = AlgoMode.BACKTRACKING; break;
+            }
+        });
+        controlPanel.add(solverAlgoCombo);
 
         JPanel counterPanel = new JPanel();
         counterPanel.setBackground(PANEL_BG);
@@ -439,24 +509,51 @@ public class GameUI extends JFrame {
     }
 
     protected boolean tryFinishAndPopup() {
+        return tryFinishAndPopup(null);
+    }
+
+    protected boolean tryFinishAndPopup(String solverAlgoName) {
         String result = validateSolution(board, rows, cols);
         if (result.equals("Puzzle solved! ✅")) {
-            onSolvedCheckTeamWin();
+            onSolvedCheckTeamWin(solverAlgoName);
             return true;
         }
         return false;
     }
 
     protected void onSolvedCheckTeamWin() {
+        onSolvedCheckTeamWin(null);
+    }
+
+    protected void onSolvedCheckTeamWin(String algoName) {
         statusLabel.setText("Puzzle solved");
         gridPanel.repaint();
-        
+
+        String message;
         boolean teamWin = userContributed && aiContributed;
-        JOptionPane.showMessageDialog(this,
-            teamWin
-              ? "Team effort! Both you and the AI (D&C + DP) contributed to solving the puzzle."
-              : "Congratulations! Puzzle solved!",
-            "Puzzle Complete", JOptionPane.INFORMATION_MESSAGE);
+        boolean solverUsed = (algoName != null && algoName.startsWith("SOLVER:"));
+        String displayAlgo = solverUsed ? algoName.substring(7) : algoName;
+
+        if (solverUsed) {
+            // Solved entirely by the Solve button
+            message = "Puzzle solved using " + displayAlgo + "! ✅";
+        } else if (teamWin && displayAlgo != null) {
+            // Both user and AI contributed during normal play
+            message = "Team effort! Both you and the AI (" + displayAlgo + ") contributed to solving the puzzle. ✅";
+        } else if (teamWin) {
+            message = "Team effort! Both you and the AI contributed to solving the puzzle. ✅";
+        } else if (!userContributed && displayAlgo != null) {
+            // AI solved it alone during normal play
+            message = "AI (" + displayAlgo + ") solved the puzzle! ✅";
+        } else if (!aiContributed) {
+            // User solved it alone
+            message = "Congratulations! You solved the puzzle! ✅";
+        } else {
+            message = "Congratulations! Puzzle solved! ✅";
+        }
+
+        JOptionPane.showMessageDialog(this, message, "Puzzle Complete",
+                JOptionPane.INFORMATION_MESSAGE);
     }
 
     protected boolean canPlaceBulb(CommonCell[][] board, int rows, int cols, int r, int c) {
