@@ -535,7 +535,7 @@ public class Solver {
             return Integer.compare(sz, sa);
         });
 
-        return dcBacktrack(b, rows, cols, blanks, 0);
+        return dcBacktrack(b, rows, cols, blanks, 0, new HashSet<>());
     }
 
     /**
@@ -544,9 +544,18 @@ public class Solver {
      * Prunes early when any numbered wall is already over-satisfied.
      */
     private static boolean dcBacktrack(CommonCell[][] b, int rows, int cols,
-                                        List<int[]> blanks, int idx) {
+                                        List<int[]> blanks, int idx, Set<String> memo) {
         if (dcHasNumberViolation(b, rows, cols)) return false;
         if (idx == blanks.size()) return dcRegionSatisfied(b, rows, cols, blanks);
+
+        // Build a state key: which of blanks[0..idx-1] hold bulbs, plus current index
+        StringBuilder sb = new StringBuilder(idx + 4);
+        for (int i = 0; i < idx; i++)
+            sb.append(b[blanks.get(i)[0]][blanks.get(i)[1]].bulb ? '1' : '0');
+        sb.append(':').append(idx);
+        String stateKey = sb.toString();
+        if (memo.contains(stateKey)) return false;
+        memo.add(stateKey);
 
         int r = blanks.get(idx)[0];
         int c = blanks.get(idx)[1];
@@ -555,13 +564,15 @@ public class Solver {
         if (canPlaceBulb(b, rows, cols, r, c)) {
             b[r][c].bulb = true;
             recomputeLighting(b, rows, cols);
-            if (dcBacktrack(b, rows, cols, blanks, idx + 1)) return true;
+            DynamicProg.clearMemo(); // invalidate cached DP tables after board mutation
+            if (dcBacktrack(b, rows, cols, blanks, idx + 1, memo)) return true;
             b[r][c].bulb = false;
             recomputeLighting(b, rows, cols);
+            DynamicProg.clearMemo();
         }
 
         // Option B: leave this cell without a bulb
-        return dcBacktrack(b, rows, cols, blanks, idx + 1);
+        return dcBacktrack(b, rows, cols, blanks, idx + 1, memo);
     }
 
     /**
