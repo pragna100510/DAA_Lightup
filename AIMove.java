@@ -29,100 +29,144 @@ public class AIMove {
         }
     }
 
-    private static final int MIN_REGION_AREA = 4;
-
     // ===== DIVIDE & CONQUER =====
     
     /**
-     * Recursively divides the region until a base case is reached,
-     * then evaluates all candidate placements in the region and returns
-     * the best (r,c) found.
-     * 
-     * @param board The game board
-     * @param region The region to evaluate
-     * @param dpScorer Function to score each candidate position
-     * @return int[]{bestScore, bestR, bestC} or null if no candidate found
+     * DIVIDE & CONQUER — wall-aware entry point.
+     *
+     * DIVIDE  : BFS flood-fill inside the given bounding Region splits the board
+     *           into connected blank pockets separated by walls.  Walls are the
+     *           natural sub-problem boundaries for Light Up — a bulb in one pocket
+     *           can never illuminate cells in another pocket.
+     *
+     * CONQUER : Each wall-bounded pocket is evaluated independently via
+     *           dcBestInWallRegion(), which scores every placeable blank cell
+     *           using the DP scorer.
+     *
+     * COMBINE : The best candidate across all pockets is returned.  When two
+     *           pockets tie on score, the one with more unlit cells wins
+     *           (it is more urgent to light).
+     *
+     * @param board    The game board
+     * @param region   Bounding rectangle to search within (pass full board for AI)
+     * @param dpScorer DP scoring function
+     * @return int[]{bestScore, bestR, bestC} or null if no placeable cell found
      */
     public static int[] dcBestInRegion(CommonCell[][] board, int rows, int cols,
                                         Region region,
                                         DPScorer dpScorer) {
-        if (region.area() <= MIN_REGION_AREA ||
-            (region.r1 - region.r0 < 1 && region.c1 - region.c0 < 1)) {
-            // BASE CASE: evaluate every blank candidate in this region
-            return evaluateRegion(board, rows, cols, region, dpScorer);
+        // DIVIDE — BFS flood-fill to find wall-separated pockets inside the bounding region
+        List<List<int[]>> pockets = dcFindWallRegions(board, rows, cols, region);
+
+        int[] best = null;
+
+        // CONQUER — evaluate each pocket independently
+        for (List<int[]> pocket : pockets) {
+            int[] candidate = dcBestInWallRegion(board, pocket, dpScorer);
+            if (candidate == null) continue;
+
+            // COMBINE — keep the higher-scoring candidate; break ties by urgency
+            if (best == null) {
+                best = candidate;
+            } else if (candidate[0] > best[0]) {
+                best = candidate;
+            } else if (candidate[0] == best[0]) {
+                // Tie-break: prefer the pocket with more unlit cells (more urgent)
+                if (countUnlitInPocket(board, pocket) > countUnlitInPocket(board, pocketOf(best, pockets)))
+                    best = candidate;
+            }
         }
 
-        // DIVIDE: split along the longer axis
-        Region left, right;
-        int rSpan = region.r1 - region.r0;
-        int cSpan = region.c1 - region.c0;
-
-        if (rSpan >= cSpan) {
-            int mid = (region.r0 + region.r1) / 2;
-            left  = new Region(region.r0, region.c0, mid, region.c1);
-            right = new Region(mid + 1, region.c0, region.r1, region.c1);
-        } else {
-            int mid = (region.c0 + region.c1) / 2;
-            left  = new Region(region.r0, region.c0, region.r1, mid);
-            right = new Region(region.r0, mid + 1, region.r1, region.c1);
-        }
-
-        // CONQUER: recursively solve both halves
-        int[] bestLeft  = dcBestInRegion(board, rows, cols, left, dpScorer);
-        int[] bestRight = dcBestInRegion(board, rows, cols, right, dpScorer);
-
-        // COMBINE: pick the better candidate
-        if (bestLeft == null) return bestRight;
-        if (bestRight == null) return bestLeft;
-
-        // If scores are equal, prefer the region with more unlit cells (more urgent)
-        if (bestLeft[0] == bestRight[0]) {
-            int unlitLeft  = countUnlitInRegion(board, left);
-            int unlitRight = countUnlitInRegion(board, right);
-            return (unlitLeft >= unlitRight) ? bestLeft : bestRight;
-        }
-        
-        return (bestLeft[0] >= bestRight[0]) ? bestLeft : bestRight;
+        return best;
     }
 
     /**
-     * Evaluates all blank, placeable candidates in a region.
-     * Returns {score, r, c}.
+     * BFS flood-fill inside a bounding Region.
+     * Returns a list of pockets, where each pocket is a list of [r,c] blank cells
+     * connected to each other without crossing a wall.
      */
-    private static int[] evaluateRegion(CommonCell[][] board, int rows, int cols,
-                                         Region reg,
-                                         DPScorer dpScorer) {
+    private static List<List<int[]>> dcFindWallRegions(CommonCell[][] board, int rows, int cols,
+                                                         Region bounds) {
+        boolean[][] visited = new boolean[rows][cols];
+        List<List<int[]>> pockets = new ArrayList<>();
+        int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
+
+        for (int r = bounds.r0; r <= bounds.r1; r++) {
+            for (int c = bounds.c0; c <= bounds.c1; c++) {
+                if (visited[r][c] || board[r][c].isWall()) continue;
+
+                // BFS from (r,c)
+                List<int[]> pocket = new ArrayList<>();
+                Queue<int[]> queue = new LinkedList<>();
+                queue.add(new int[]{r, c});
+                visited[r][c] = true;
+
+                while (!queue.isEmpty()) {
+                    int[] cur = queue.poll();
+                    pocket.add(cur);
+                    for (int[] d : dirs) {
+                        int nr = cur[0] + d[0], nc = cur[1] + d[1];
+                        if (nr < bounds.r0 || nr > bounds.r1 || nc < bounds.c0 || nc > bounds.c1) continue;
+                        if (visited[nr][nc] || board[nr][nc].isWall()) continue;
+                        visited[nr][nc] = true;
+                        queue.add(new int[]{nr, nc});
+                    }
+                }
+                pockets.add(pocket);
+            }
+        }
+        return pockets;
+    }
+
+    /**
+     * CONQUER step: scores every blank, placeable cell in one wall-bounded pocket
+     * using the DP scorer and returns the best {score, r, c}.
+     */
+    private static int[] dcBestInWallRegion(CommonCell[][] board,
+                                             List<int[]> pocket,
+                                             DPScorer dpScorer) {
         int bestScore = Integer.MIN_VALUE;
         int bestR = -1, bestC = -1;
 
-        for (int r = reg.r0; r <= reg.r1; r++) {
-            for (int c = reg.c0; c <= reg.c1; c++) {
-                if (board[r][c].type != CommonCell.CellType.BLANK) continue;
-                
-                int score = dpScorer.score(r, c);
-                if (score == Integer.MIN_VALUE) continue; // canPlace returned false
-                
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestR = r;
-                    bestC = c;
-                }
+        for (int[] cell : pocket) {
+            int r = cell[0], c = cell[1];
+            if (board[r][c].type != CommonCell.CellType.BLANK) continue;
+
+            int score = dpScorer.score(r, c);
+            if (score == Integer.MIN_VALUE) continue; // canPlace returned false
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestR = r;
+                bestC = c;
             }
         }
-        
+
         return (bestR == -1) ? null : new int[]{bestScore, bestR, bestC};
     }
 
     /**
-     * Counts unlit blank cells in a region (used for D&C urgency comparison).
+     * Counts unlit blank cells in a wall-bounded pocket (for tie-breaking).
      */
-    private static int countUnlitInRegion(CommonCell[][] board, Region reg) {
+    private static int countUnlitInPocket(CommonCell[][] board, List<int[]> pocket) {
+        if (pocket == null) return 0;
         int count = 0;
-        for (int r = reg.r0; r <= reg.r1; r++)
-            for (int c = reg.c0; c <= reg.c1; c++)
-                if (board[r][c].type == CommonCell.CellType.BLANK && !board[r][c].lit)
-                    count++;
+        for (int[] cell : pocket)
+            if (board[cell[0]][cell[1]].type == CommonCell.CellType.BLANK && !board[cell[0]][cell[1]].lit)
+                count++;
         return count;
+    }
+
+    /**
+     * Finds which pocket in the list contains the cell at {score,r,c}.
+     * Used for tie-breaking in the COMBINE step.
+     */
+    private static List<int[]> pocketOf(int[] best, List<List<int[]>> pockets) {
+        for (List<int[]> pocket : pockets)
+            for (int[] cell : pocket)
+                if (cell[0] == best[1] && cell[1] == best[2])
+                    return pocket;
+        return Collections.emptyList();
     }
 
     // ===== AI MOVE LOGIC =====
