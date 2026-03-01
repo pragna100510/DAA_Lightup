@@ -10,6 +10,33 @@ import java.util.*;
  */
 public class DynamicProg {
 
+    // ===== MEMOIZATION CACHES =====
+    // Key: compact board-state string (bulb/dot/lit per cell)
+    // Value: the previously computed DP table for that state
+    private static final Map<String, int[][]> memoLightGain  = new HashMap<>();
+    private static final Map<String, int[][]> memoNumberScore = new HashMap<>();
+    private static final Map<String, int[][]> memoFutureBlock = new HashMap<>();
+
+    /** Encodes the mutable board state (bulb/dot/lit) into a compact string key. */
+    private static String boardStateKey(CommonCell[][] board, int rows, int cols) {
+        char[] buf = new char[rows * cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++) {
+                int bits = (board[r][c].bulb ? 4 : 0)
+                         | (board[r][c].dot  ? 2 : 0)
+                         | (board[r][c].lit  ? 1 : 0);
+                buf[r * cols + c] = (char)('0' + bits);
+            }
+        return new String(buf);
+    }
+
+    /** Clears all DP caches — call before starting a fresh solve. */
+    public static void clearMemo() {
+        memoLightGain.clear();
+        memoNumberScore.clear();
+        memoFutureBlock.clear();
+    }
+
     public static class GraphNode {
         public int id;
         public int row, col;
@@ -27,6 +54,9 @@ public class DynamicProg {
      * placed at (r,c) would illuminate.
      */
     public static int[][] buildDPLightGain(CommonCell[][] board, int rows, int cols) {
+        String key = boardStateKey(board, rows, cols);
+        if (memoLightGain.containsKey(key)) return memoLightGain.get(key);
+
         int[][] dpLightGain = new int[rows][cols];
 
         // Horizontal contribution
@@ -83,6 +113,7 @@ public class DynamicProg {
                 if (board[r][c].type == CommonCell.CellType.BLANK && !board[r][c].lit)
                     dpLightGain[r][c]--;   // remove the double-count
                     
+        memoLightGain.put(key, dpLightGain);
         return dpLightGain;
     }
 
@@ -93,6 +124,9 @@ public class DynamicProg {
      * satisfy adjacent numbered cells.
      */
     public static int[][] buildDPNumberScore(CommonCell[][] board, int rows, int cols) {
+        String key = boardStateKey(board, rows, cols);
+        if (memoNumberScore.containsKey(key)) return memoNumberScore.get(key);
+
         int[][] dpNumberScore = new int[rows][cols];
         int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
 
@@ -130,6 +164,7 @@ public class DynamicProg {
             }
         }
         
+        memoNumberScore.put(key, dpNumberScore);
         return dpNumberScore;
     }
 
@@ -140,6 +175,9 @@ public class DynamicProg {
      * in the same rows/columns would be blocked if we place a bulb at (r,c).
      */
     public static int[][] buildDPFutureBlock(CommonCell[][] board, int rows, int cols) {
+        String key = boardStateKey(board, rows, cols);
+        if (memoFutureBlock.containsKey(key)) return memoFutureBlock.get(key);
+
         int[][] dpFutureBlock = new int[rows][cols];
 
         // Row-wise
@@ -192,6 +230,7 @@ public class DynamicProg {
             }
         }
         
+        memoFutureBlock.put(key, dpFutureBlock);
         return dpFutureBlock;
     }
 
