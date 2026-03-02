@@ -163,14 +163,21 @@ public class GameUI extends JFrame {
             new LineBorder(new Color(220,225,230),1),
             new EmptyBorder(20,15,20,15)));
 
-        JButton newGameBtn = createMinimalButton("New Game", new Color(70,130,180));
-        JButton restartBtn = createMinimalButton("Restart", new Color(65,105,225));
-        JButton undoBtn    = createMinimalButton("Undo", new Color(72, 61,139));
-        JButton redoBtn    = createMinimalButton("Redo", new Color(106,90,205));
-        JButton solveBtn   = createMinimalButton("Solve", new Color(50,180, 80));
+        JButton newGameBtn     = createMinimalButton("New Game",         new Color(70,130,180));
+        JButton restartBtn     = createMinimalButton("Restart",           new Color(255,105,225));
+        JButton undoBtn        = createMinimalButton("Undo",              new Color(72, 61,139));
+        JButton redoBtn        = createMinimalButton("Redo",              new Color(106,90,205));
+        JButton solveBtn       = createMinimalButton("Solve",             new Color(50,180, 80));
+        JButton complexityBtn  = createMinimalButton("Complexity",     new Color(180, 100, 20));
 
         undoBtn.addActionListener(e -> handleUndo());
         redoBtn.addActionListener(e -> handleRedo());
+        complexityBtn.setToolTipText("View time & space complexity charts for the 3 AI algorithms");
+        complexityBtn.addActionListener(e -> showComplexityDialog());
+
+        JButton vizBtn = createMinimalButton("BT Visualizer", new Color(120, 60, 160));
+        vizBtn.setToolTipText("Watch backtracking solve step-by-step");
+        vizBtn.addActionListener(e -> showBacktrackingVisualizer());
 
         controlPanel.add(newGameBtn);
         controlPanel.add(Box.createVerticalStrut(8));
@@ -181,6 +188,10 @@ public class GameUI extends JFrame {
         controlPanel.add(redoBtn);
         controlPanel.add(Box.createVerticalStrut(8));
         controlPanel.add(solveBtn);
+        controlPanel.add(Box.createVerticalStrut(8));
+        controlPanel.add(complexityBtn);
+        controlPanel.add(Box.createVerticalStrut(8));
+        controlPanel.add(vizBtn);
 
         // ── Algorithm selectors ────────────────────────────────────────────
         String[] algoOptions = { "Greedy", "DC + DP", "Backtracking" };
@@ -281,7 +292,7 @@ public class GameUI extends JFrame {
         JButton button = new JButton(text);
         button.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         button.setForeground(new Color(50,60,80));
-        button.setBackground(Color.WHITE);
+        button.setBackground(Color.YELLOW);
         button.setBorder(BorderFactory.createCompoundBorder(
             new LineBorder(new Color(220,225,230),1),
             new EmptyBorder(10,20,10,20)));
@@ -299,7 +310,7 @@ public class GameUI extends JFrame {
             }
             @Override
             public void mouseExited(MouseEvent e) {
-                button.setBackground(Color.WHITE);
+                button.setBackground(Color.YELLOW);
                 button.setBorder(BorderFactory.createCompoundBorder(
                     new LineBorder(new Color(220,225,230),1),
                     new EmptyBorder(10,20,10,20)));
@@ -490,7 +501,7 @@ public class GameUI extends JFrame {
             }
         }
         
-        // Numbered cells
+        // Numbered cells — only flag when OVER-satisfied (too many bulbs), not under-satisfied
         if (cell.type == CommonCell.CellType.NUMBER) {
             int[][] dirs = {{1,0},{-1,0},{0,1},{0,-1}};
             int count = 0;
@@ -500,8 +511,8 @@ public class GameUI extends JFrame {
                     count++;
                 }
             }
-            if (count != cell.number) {
-                return true; // Wrong number of adjacent bulbs
+            if (count > cell.number) {
+                return true; // Over-satisfied: more bulbs than the number requires
             }
         }
         
@@ -690,6 +701,22 @@ public class GameUI extends JFrame {
                 g2.drawRect(x, y, cellSize, cellSize);
             }
         }
+    }
+
+    // ===== COMPLEXITY ANALYSIS DIALOG =====
+
+    /**
+     * Opens the complexity-analysis dialog showing Big-O charts and a
+     * comparison table for the three AI algorithms.
+     */
+    protected void showComplexityDialog() {
+        ComplexityAnalysis dialog = new ComplexityAnalysis(this);
+        dialog.setVisible(true);
+    }
+
+    protected void showBacktrackingVisualizer() {
+        BacktrackingVisualizer viz = new BacktrackingVisualizer(this, board, rows, cols);
+        viz.setVisible(true);
     }
 
     protected void updateStatusLabel() {
