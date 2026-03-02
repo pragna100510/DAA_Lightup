@@ -204,9 +204,6 @@ public class LightUpMain extends GameUI {
     // ===== AI MOVE =====
     
     private void computerMakeOneMove() {
-        // Save snapshot before move
-        BoardState beforeMove = snapshotState();
-
         int[] move;
 
         switch (aiAlgoMode) {
